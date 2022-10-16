@@ -1,3 +1,4 @@
+from unicodedata import name
 from aws_cdk import (
     Stack,
 )
@@ -5,6 +6,7 @@ from json import dumps
 import aws_cdk.aws_lambda as lambda_
 import aws_cdk.aws_dynamodb as dynamo_
 import aws_cdk.aws_apigateway as apigateway_
+import aws_cdk.aws_ec2 as ec2_
 from constructs import Construct
 
 from stacks.libs.external_libraries_layer import ExternalLibrariesLayer
@@ -13,6 +15,26 @@ from stacks.libs.external_libraries_layer import ExternalLibrariesLayer
 class CdkFirstCdkv2ServerlessPythonStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
+
+        vpc = ec2_.Vpc(
+            self,
+            "Static-Outbound-IP-VPC",
+            cidr="10.0.0.0/16",
+            nat_gateways=1,
+            max_azs=3,
+            subnet_configuration=[
+                ec2_.SubnetConfiguration(
+                    name="private-subnet-1",
+                    subnet_type=ec2_.SubnetType.PRIVATE_WITH_NAT,
+                    cidr_mask=24,
+                ),
+                ec2_.SubnetConfiguration(
+                    name="public-subnet-1",
+                    subnet_type=ec2_.SubnetType.PUBLIC,
+                    cidr_mask=24,
+                ),
+            ],
+        )
 
         # DynamoDB table
         db_table = dynamo_.Table(
@@ -42,6 +64,10 @@ class CdkFirstCdkv2ServerlessPythonStack(Stack):
                 "MY_TABLE": db_table.table_name,
             },
             layers=self.__layers,
+            vpc=vpc,
+            vpc_subnets=ec2_.SubnetSelection(
+                subnet_type=ec2_.SubnetType.PRIVATE_WITH_NAT,
+            ),
         )
 
         db_table.grant_read_write_data(lambda_func)
